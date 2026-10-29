@@ -110,19 +110,25 @@ wait_for "gateway-shim Certificate" 120 kubectl -n e2e get certificate gw-exampl
 kubectl -n e2e wait --for=condition=Ready certificate/gw-example-com-tls --timeout="$TIMEOUT"
 kubectl -n e2e get certificate gw-example-com-tls -o jsonpath='{.spec.dnsNames}' | grep -q '\*.gw.example.com'
 
-log "Waiting for automatic renewal (revision 1 -> 2)"
+# Certificates are valid for 1h and renew at 98% of that, so cert-manager
+# renews them roughly every 72s for as long as they exist. Compare against
+# the revision seen now rather than assuming 1, as example-com may already
+# have renewed while the Gateway certificate was being issued.
+log "Waiting for automatic renewal"
 for cert in example-com gw-example-com-tls; do
-  [[ "$(revision "$cert")" == 1 ]] || { echo "unexpected initial revision for $cert: $(revision "$cert")" >&2; exit 1; }
-done
-for cert in example-com gw-example-com-tls; do
-  wait_for "$cert renewal" 300 bash -c "[[ \$(kubectl -n e2e get certificate $cert -o jsonpath='{.status.revision}') -ge 2 ]]"
+  start="$(revision "$cert")"
+  wait_for "$cert renewal" 300 bash -c "[[ \$(kubectl -n e2e get certificate $cert -o jsonpath='{.status.revision}') -gt $start ]]"
   kubectl -n e2e wait --for=condition=Ready "certificate/$cert" --timeout="$TIMEOUT"
-  echo "$cert renewed: revision $(revision "$cert")"
+  echo "$cert renewed automatically: revision $start -> $(revision "$cert")"
 done
 
-log "Checking challenge TXT records were cleaned up"
+# Deleting the resources stops the renewal loop; any in-flight challenge is
+# then cleaned up through cert-manager's finalizer, which calls CleanUp.
+log "Deleting Gateway and Certificate, checking TXT records are cleaned up"
+kubectl -n e2e delete gateway web --wait=true
+kubectl -n e2e delete certificate example-com gw-example-com-tls --ignore-not-found --wait=true
 # shellcheck disable=SC2016 # expanded by the inner bash on every poll
-wait_for "challenges to be removed" 120 bash -c '[[ -z $(kubectl get challenges -A -o name) ]]'
+wait_for "challenges to be removed" 180 bash -c '[[ -z $(kubectl get challenges -A -o name) ]]'
 records="$(kubectl get --raw /api/v1/namespaces/e2e/services/http:fake-hostinger:80/proxy/debug/zones/example.com)"
 if grep -q '"TXT"' <<<"$records"; then
   echo "leftover TXT records: $records" >&2
