@@ -170,6 +170,26 @@ func TestRecordNames(t *testing.T) {
 	}
 }
 
+func TestZoneOverride(t *testing.T) {
+	s, api := newSolver(t)
+	// cert-manager resolved a delegated subzone, but Hostinger manages the
+	// parent domain.
+	ch := challenge(t, api, "_acme-challenge.app.example.com.", "v", map[string]any{"zone": "example.com"})
+	ch.ResolvedZone = "app.example.com."
+	if err := s.Present(ch); err != nil {
+		t.Fatalf("Present: %v", err)
+	}
+	if got := api.TXT("example.com", "_acme-challenge.app"); !slices.Equal(got, []string{"v"}) {
+		t.Fatalf("TXT = %v", got)
+	}
+	if err := s.CleanUp(ch); err != nil {
+		t.Fatalf("CleanUp: %v", err)
+	}
+	if got := api.TXT("example.com", "_acme-challenge.app"); len(got) != 0 {
+		t.Fatalf("TXT after CleanUp = %v", got)
+	}
+}
+
 func TestErrors(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -204,6 +224,11 @@ func TestErrors(t *testing.T) {
 			name:    "invalid ttl",
 			extra:   map[string]any{"ttl": 0},
 			wantErr: "ttl must be positive",
+		},
+		{
+			name:    "zone override outside fqdn",
+			extra:   map[string]any{"zone": "other.org"},
+			wantErr: `is not inside zone "other.org"`,
 		},
 		{
 			name:    "missing config",

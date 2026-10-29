@@ -40,6 +40,11 @@ type Config struct {
 	ServerURL string `json:"serverURL,omitempty"`
 	// TTL of the challenge TXT record in seconds. Defaults to 60.
 	TTL *int `json:"ttl,omitempty"`
+	// Zone overrides the Hostinger domain to edit. By default the zone that
+	// cert-manager resolved via SOA lookups is used; set this when that zone
+	// is not the domain name Hostinger knows it as (e.g. a delegated subzone).
+	// The challenge FQDN must be inside it.
+	Zone string `json:"zone,omitempty"`
 }
 
 // Solver implements webhook.Solver for Hostinger.
@@ -90,7 +95,10 @@ func (s *Solver) Present(ch *v1alpha1.ChallengeRequest) error {
 	if err != nil {
 		return err
 	}
-	zone, name := zoneAndName(ch)
+	zone, name, err := zoneAndName(ch, cfg)
+	if err != nil {
+		return err
+	}
 
 	unlock := s.lock(zone, name)
 	defer unlock()
@@ -127,11 +135,14 @@ func (s *Solver) CleanUp(ch *v1alpha1.ChallengeRequest) error {
 	ctx, cancel := context.WithTimeout(context.Background(), operationTimeout)
 	defer cancel()
 
-	api, _, err := s.clientFor(ctx, ch)
+	api, cfg, err := s.clientFor(ctx, ch)
 	if err != nil {
 		return err
 	}
-	zone, name := zoneAndName(ch)
+	zone, name, err := zoneAndName(ch, cfg)
+	if err != nil {
+		return err
+	}
 
 	unlock := s.lock(zone, name)
 	defer unlock()
@@ -247,13 +258,21 @@ func findTXT(ctx context.Context, api *Client, zone, name string) (*RecordSet, e
 
 // zoneAndName splits the challenge FQDN into the Hostinger zone (domain) and
 // the record name relative to it, using "@" for the zone apex.
-func zoneAndName(ch *v1alpha1.ChallengeRequest) (zone, name string) {
-	zone = strings.ToLower(util.UnFqdn(ch.ResolvedZone))
+func zoneAndName(ch *v1alpha1.ChallengeRequest, cfg Config) (zone, name string, err error) {
+	zone = ch.ResolvedZone
+	if cfg.Zone != "" {
+		zone = cfg.Zone
+	}
+	zone = strings.ToLower(util.UnFqdn(zone))
 	fqdn := strings.ToLower(util.UnFqdn(ch.ResolvedFQDN))
 	if fqdn == zone {
-		return zone, "@"
+		return zone, "@", nil
 	}
-	return zone, strings.TrimSuffix(fqdn, "."+zone)
+	name, ok := strings.CutSuffix(fqdn, "."+zone)
+	if !ok {
+		return "", "", fmt.Errorf("challenge FQDN %q is not inside zone %q", ch.ResolvedFQDN, zone)
+	}
+	return zone, name, nil
 }
 
 func hasValue(set *RecordSet, value string) bool {
