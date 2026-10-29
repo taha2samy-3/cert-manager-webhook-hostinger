@@ -121,6 +121,7 @@ for cert in example-com gw-example-com-tls; do
 done
 
 log "Checking challenge TXT records were cleaned up"
+# shellcheck disable=SC2016 # expanded by the inner bash on every poll
 wait_for "challenges to be removed" 120 bash -c '[[ -z $(kubectl get challenges -A -o name) ]]'
 records="$(kubectl get --raw /api/v1/namespaces/e2e/services/http:fake-hostinger:80/proxy/debug/zones/example.com)"
 if grep -q '"TXT"' <<<"$records"; then

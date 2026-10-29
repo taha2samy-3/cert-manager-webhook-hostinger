@@ -2,6 +2,8 @@ module github.com/taha2samy-3/cert-manager-webhook-hostinger
 
 go 1.26.0
 
+toolchain go1.26.10
+
 require (
 	github.com/cert-manager/cert-manager v1.21.3
 	github.com/miekg/dns v1.1.73

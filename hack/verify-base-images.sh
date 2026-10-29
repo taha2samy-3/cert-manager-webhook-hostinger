@@ -7,7 +7,7 @@ OWNER="taha2samy-3"
 SIGNER="taha2samy-3/node/.github/workflows/build-images.yml"
 
 status=0
-for image in $(sed -nE 's/^FROM( --platform=[^ ]+)? ([^ ]+).*/\2/p' "${@:-Dockerfile}" | sort -u); do
+while read -r image; do
   if [[ "$image" != *@sha256:* ]]; then
     echo "::error::base image $image is not pinned by digest"
     status=1
@@ -18,5 +18,5 @@ for image in $(sed -nE 's/^FROM( --platform=[^ ]+)? ([^ ]+).*/\2/p' "${@:-Docker
     echo "::error::provenance verification failed for $image"
     status=1
   fi
-done
+done < <(sed -nE 's/^FROM( --platform=[^ ]+)? ([^ ]+).*/\2/p' "${@:-Dockerfile}" | sort -u)
 exit $status
