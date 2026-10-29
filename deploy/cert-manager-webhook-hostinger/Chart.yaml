@@ -28,7 +28,7 @@ annotations:
       url: https://cert-manager.io/docs/configuration/acme/dns01/webhook/
     - name: Hostinger API
       url: https://developers.hostinger.com
-  # Set by the release workflow to the exact image (with digest) and changes.
+  # Set by the release workflow (build-chart.yml) for each release.
   artifacthub.io/images: |
     - name: cert-manager-webhook-hostinger
       image: ghcr.io/taha2samy-3/cert-manager-webhook-hostinger:0.0.0

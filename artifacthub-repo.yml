@@ -1,0 +1,10 @@
+# ArtifactHub repository metadata, pushed to
+# oci://ghcr.io/taha2samy-3/charts/cert-manager-webhook-hostinger:artifacthub.io
+# by .github/workflows/build-chart.yml.
+#
+# After adding the repository on artifacthub.io, paste the repository ID it
+# shows here to get the "Verified Publisher" badge.
+repositoryID: 00000000-0000-0000-0000-000000000000
+owners:
+  - name: taha2samy-3
+    email: tsamy@trypair.ai

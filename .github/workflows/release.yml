@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  # Called by auto-release.yml after it creates the tag (tags pushed with
+  # GITHUB_TOKEN do not trigger workflows).
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  image:
+    needs: [tests]
+    uses: ./.github/workflows/build-image.yml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      version: ${{ inputs.tag || github.ref_name }}
+
+  chart:
+    needs: [image]
+    uses: ./.github/workflows/build-chart.yml
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      version: ${{ inputs.tag || github.ref_name }}
+      image-digest: ${{ needs.image.outputs.digest }}
+
+  github-release:
+    needs: [image, chart]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: chart
+          path: dist
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          IMAGE: ${{ needs.image.outputs.image }}
+          IMAGE_DIGEST: ${{ needs.image.outputs.digest }}
+          CHART: ${{ needs.chart.outputs.chart }}
+          CHART_DIGEST: ${{ needs.chart.outputs.digest }}
+        run: |
+          version="${TAG#v}"
+          cat > notes.md <<EOF
+          ## Install
+
+          \`\`\`sh
+          helm install hostinger-webhook oci://${CHART} --version ${version} --namespace cert-manager
+          \`\`\`
+
+          | Artifact | Reference |
+          |---|---|
+          | Image | \`${IMAGE}:${version}@${IMAGE_DIGEST}\` |
+          | Chart | \`${CHART}:${version}@${CHART_DIGEST}\` |
+
+          ## Verify (SLSA Build L3 provenance)
+
+          \`\`\`sh
+          gh attestation verify oci://${IMAGE}:${version} --owner ${GITHUB_REPOSITORY_OWNER} \\
+            --signer-workflow ${GITHUB_REPOSITORY}/.github/workflows/build-image.yml
+          gh attestation verify oci://${CHART}:${version} --owner ${GITHUB_REPOSITORY_OWNER} \\
+            --signer-workflow ${GITHUB_REPOSITORY}/.github/workflows/build-chart.yml
+          \`\`\`
+          EOF
+          sed -i 's/^          //' notes.md
+          prerelease=()
+          [[ "$TAG" == *-* ]] && prerelease=(--prerelease)
+          gh release create "$TAG" dist/*.tgz --repo "$GITHUB_REPOSITORY" \
+            --title "$TAG" --notes-file notes.md --generate-notes --verify-tag "${prerelease[@]}"
