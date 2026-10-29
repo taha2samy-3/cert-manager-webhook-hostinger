@@ -2,8 +2,9 @@
 # oci://ghcr.io/taha2samy-3/charts/cert-manager-webhook-hostinger:artifacthub.io
 # by .github/workflows/build-chart.yml.
 #
-# After adding the repository on artifacthub.io, paste the repository ID it
-# shows here to get the "Verified Publisher" badge.
+# repositoryID is filled in at release time from the ArtifactHub API when the
+# ARTIFACTHUB_API_KEY_ID/ARTIFACTHUB_API_KEY_SECRET repository secrets are set
+# (the repository is registered on ArtifactHub automatically if missing).
 repositoryID: 00000000-0000-0000-0000-000000000000
 owners:
   - name: taha2samy-3

@@ -74,5 +74,6 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+    secrets: inherit
     with:
       tag: ${{ needs.plan.outputs.tag }}

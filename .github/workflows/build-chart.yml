@@ -18,6 +18,11 @@ on:
         description: Digest of the image built for this release
         required: true
         type: string
+    secrets:
+      ARTIFACTHUB_API_KEY_ID:
+        required: false
+      ARTIFACTHUB_API_KEY_SECRET:
+        required: false
     outputs:
       chart:
         description: OCI reference of the chart
@@ -123,7 +128,40 @@ jobs:
         run: cosign sign --yes "$REF"
 
       # ArtifactHub reads repository metadata (ownership, verified publisher)
-      # from the "artifacthub.io" tag of the OCI repository.
+      # from the "artifacthub.io" tag of the OCI repository. With an API key,
+      # the repository is registered on ArtifactHub if missing and its ID is
+      # filled in automatically.
+      - name: Register on ArtifactHub
+        env:
+          CHART: ${{ steps.push.outputs.chart }}
+          AH_KEY_ID: ${{ secrets.ARTIFACTHUB_API_KEY_ID }}
+          AH_KEY_SECRET: ${{ secrets.ARTIFACTHUB_API_KEY_SECRET }}
+        run: |
+          if [[ -z "$AH_KEY_ID" || -z "$AH_KEY_SECRET" ]]; then
+            echo "::notice::ArtifactHub API key not configured; using repositoryID from artifacthub-repo.yml"
+            exit 0
+          fi
+          api=https://artifacthub.io/api/v1
+          url="oci://$CHART"
+          hdr=(-H "X-API-KEY-ID: $AH_KEY_ID" -H "X-API-KEY-SECRET: $AH_KEY_SECRET")
+          alias="$(curl -fsS "${hdr[@]}" "$api/users/profile" | jq -r .alias)"
+          find_id() {
+            curl -fsS "${hdr[@]}" "$api/repositories/search?user=$alias&kind=0&limit=60" |
+              jq -r --arg url "$url" '[.[] | select(.url == $url) | .repository_id][0] // empty'
+          }
+          id="$(find_id)"
+          if [[ -z "$id" ]]; then
+            echo "Registering $url on ArtifactHub"
+            jq -n --arg url "$url" '{kind: 0, name: "cert-manager-webhook-hostinger",
+                display_name: "cert-manager webhook for Hostinger", url: $url}' |
+              curl -fsS "${hdr[@]}" -H 'Content-Type: application/json' -X POST "$api/repositories/user" --data-binary @-
+            id="$(find_id)"
+          fi
+          [[ -n "$id" ]] || { echo "::error::could not resolve the ArtifactHub repository ID"; exit 1; }
+          export id
+          yq -i '.repositoryID = strenv(id)' artifacthub-repo.yml
+          echo "ArtifactHub repository ID: $id"
+
       - uses: oras-project/setup-oras@5e2f2482b30b0cb3e14e67f89a80c88c659a7c63 # v2.0.3
       - name: Push ArtifactHub repository metadata
         env:

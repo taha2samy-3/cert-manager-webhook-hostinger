@@ -45,6 +45,9 @@ jobs:
     with:
       version: ${{ inputs.tag || github.ref_name }}
       image-digest: ${{ needs.image.outputs.digest }}
+    secrets:
+      ARTIFACTHUB_API_KEY_ID: ${{ secrets.ARTIFACTHUB_API_KEY_ID }}
+      ARTIFACTHUB_API_KEY_SECRET: ${{ secrets.ARTIFACTHUB_API_KEY_SECRET }}
 
   github-release:
     needs: [image, chart]
