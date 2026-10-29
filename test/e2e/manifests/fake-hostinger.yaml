@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: e2e
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fake-hostinger
+  namespace: e2e
+spec:
+  selector:
+    matchLabels: {app: fake-hostinger}
+  template:
+    metadata:
+      labels: {app: fake-hostinger}
+    spec:
+      containers:
+        - name: fake
+          image: fake-hostinger:e2e
+          imagePullPolicy: Never
+          args: ["--token=e2e-token", "--zones=example.com"]
+          ports:
+            - {name: http, containerPort: 8080}
+            - {name: dns-udp, containerPort: 5353, protocol: UDP}
+            - {name: dns-tcp, containerPort: 5353, protocol: TCP}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fake-hostinger
+  namespace: e2e
+spec:
+  selector: {app: fake-hostinger}
+  ports:
+    - {name: http, port: 80, targetPort: http}
+    - {name: dns-udp, port: 53, targetPort: dns-udp, protocol: UDP}
+    - {name: dns-tcp, port: 53, targetPort: dns-tcp, protocol: TCP}

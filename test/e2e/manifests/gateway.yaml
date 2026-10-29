@@ -1,0 +1,28 @@
+# cert-manager's gateway-shim creates a Certificate for each HTTPS listener
+# of an annotated Gateway. No Gateway controller is needed for that.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: e2e
+spec:
+  controllerName: example.com/e2e-unused
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: web
+  namespace: e2e
+  annotations:
+    cert-manager.io/cluster-issuer: pebble
+    cert-manager.io/renew-before-percentage: "98"
+spec:
+  gatewayClassName: e2e
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: "*.gw.example.com"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: gw-example-com-tls

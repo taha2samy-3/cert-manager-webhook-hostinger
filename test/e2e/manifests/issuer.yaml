@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hostinger-credentials
+  namespace: cert-manager
+stringData:
+  api-token: e2e-token
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: pebble
+spec:
+  acme:
+    server: https://pebble.e2e.svc:14000/dir
+    # Pebble serves a throwaway test certificate.
+    skipTLSVerify: true
+    privateKeySecretRef:
+      name: pebble-account
+    solvers:
+      - dns01:
+          webhook:
+            groupName: GROUP_NAME
+            solverName: hostinger
+            config:
+              apiTokenSecretRef:
+                name: hostinger-credentials
+                key: api-token
+              serverURL: http://fake-hostinger.e2e.svc

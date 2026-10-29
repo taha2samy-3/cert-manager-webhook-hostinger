@@ -30,6 +30,14 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/", fake)
+	// Unauthenticated read-only view of a zone, reachable through the API
+	// server's service proxy (which strips Authorization headers).
+	mux.HandleFunc("GET /debug/zones/{zone}", func(w http.ResponseWriter, r *http.Request) {
+		req := r.Clone(r.Context())
+		req.URL.Path = "/api/dns/v1/zones/" + r.PathValue("zone")
+		req.Header.Set("Authorization", "Bearer "+*token)
+		fake.ServeHTTP(w, req)
+	})
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	log.Printf("fake Hostinger API on %s, DNS on %s, zones %s", *httpAddr, *dnsAddr, *zones)
 	srv := &http.Server{Addr: *httpAddr, Handler: logRequests(mux), ReadHeaderTimeout: 10 * time.Second}

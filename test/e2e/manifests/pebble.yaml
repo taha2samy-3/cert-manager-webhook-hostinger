@@ -1,0 +1,63 @@
+# Pebble is Let's Encrypt's ACME test server. Certificates are valid for one
+# hour so the suite can observe cert-manager renewing them on its own.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pebble
+  namespace: e2e
+data:
+  pebble-config.json: |
+    {
+      "pebble": {
+        "listenAddress": "0.0.0.0:14000",
+        "managementListenAddress": "0.0.0.0:15000",
+        "certificate": "test/certs/localhost/cert.pem",
+        "privateKey": "test/certs/localhost/key.pem",
+        "httpPort": 5002,
+        "tlsPort": 5001,
+        "ocspResponderURL": "",
+        "externalAccountBindingRequired": false,
+        "retryAfter": {"authz": 1, "order": 1},
+        "keyAlgorithm": "ecdsa",
+        "profiles": {
+          "default": {"description": "e2e", "validityPeriod": 3600}
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pebble
+  namespace: e2e
+spec:
+  selector:
+    matchLabels: {app: pebble}
+  template:
+    metadata:
+      labels: {app: pebble}
+    spec:
+      containers:
+        - name: pebble
+          image: ghcr.io/letsencrypt/pebble:v2.10.1
+          args: ["-config", "/config/pebble-config.json", "-dnsserver", "FAKE_DNS_ADDR"]
+          env:
+            - {name: PEBBLE_VA_NOSLEEP, value: "1"}
+            - {name: PEBBLE_WFE_NONCEREJECT, value: "0"}
+          ports:
+            - {name: acme, containerPort: 14000}
+          volumeMounts:
+            - {name: config, mountPath: /config}
+      volumes:
+        - name: config
+          configMap: {name: pebble}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pebble
+  namespace: e2e
+spec:
+  selector: {app: pebble}
+  ports:
+    - {name: acme, port: 14000, targetPort: acme}

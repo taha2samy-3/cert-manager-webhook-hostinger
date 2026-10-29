@@ -3,3 +3,4 @@
 !go.sum
 !cmd/
 !internal/
+!test/e2e/fakehostinger/

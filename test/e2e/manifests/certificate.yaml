@@ -1,0 +1,20 @@
+# Apex + wildcard share _acme-challenge.example.com, so this also exercises
+# two TXT values on the same name. Pebble issues 1h certificates; renewing at
+# 98% of the lifetime makes cert-manager renew after ~72s without any trigger.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: example-com
+  namespace: e2e
+spec:
+  secretName: example-com-tls
+  issuerRef:
+    kind: ClusterIssuer
+    name: pebble
+  dnsNames:
+    - example.com
+    - "*.example.com"
+  renewBeforePercentage: 98
+  privateKey:
+    algorithm: ECDSA
+    rotationPolicy: Always
