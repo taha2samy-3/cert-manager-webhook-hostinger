@@ -39,7 +39,7 @@ spec:
     spec:
       containers:
         - name: pebble
-          image: ghcr.io/letsencrypt/pebble:v2.10.1
+          image: ghcr.io/letsencrypt/pebble:2.10.1@sha256:ddf230642b1a584f519f32e347de1b05a6e4c1f6c35c1863b33effeab5f78199
           args: ["-config", "/config/pebble-config.json", "-dnsserver", "FAKE_DNS_ADDR"]
           env:
             - {name: PEBBLE_VA_NOSLEEP, value: "1"}

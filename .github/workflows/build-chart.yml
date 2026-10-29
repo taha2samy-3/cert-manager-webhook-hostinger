@@ -89,6 +89,8 @@ jobs:
 
       - name: Lint and package
         run: |
+          # ArtifactHub renders the README packaged inside the chart.
+          cp README.md "$CHART_DIR/README.md"
           helm lint --strict "$CHART_DIR"
           helm package "$CHART_DIR" --destination dist
 
