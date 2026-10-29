@@ -5,7 +5,7 @@
 # repositoryID is filled in at release time from the ArtifactHub API when the
 # ARTIFACTHUB_API_KEY_ID/ARTIFACTHUB_API_KEY_SECRET repository secrets are set
 # (the repository is registered on ArtifactHub automatically if missing).
-repositoryID: 00000000-0000-0000-0000-000000000000
+repositoryID: 85de7a97-7572-47c9-adcb-c55d7e234211
 owners:
   - name: taha2samy-3
     email: tsamy@trypair.ai

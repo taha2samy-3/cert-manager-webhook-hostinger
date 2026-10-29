@@ -156,7 +156,7 @@ jobs:
           hdr=(-H "X-API-KEY-ID: $AH_KEY_ID" -H "X-API-KEY-SECRET: $AH_KEY_SECRET")
           alias="$(curl -fsS "${hdr[@]}" "$api/users/profile" | jq -r .alias)"
           find_id() {
-            curl -fsS "${hdr[@]}" "$api/repositories/search?user=$alias&kind=0&limit=60" |
+            curl -fsS "${hdr[@]}" "$api/repositories/search?user=$alias&name=cert-manager-webhook-hostinger&limit=60" |
               jq -r --arg url "$url" '[.[] | select(.url == $url) | .repository_id][0] // empty'
           }
           id="$(find_id)"
