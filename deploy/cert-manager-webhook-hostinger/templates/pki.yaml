@@ -1,0 +1,61 @@
+# Self-signed CA used only to secure traffic between the Kubernetes API
+# server and this webhook. cert-manager injects it into the APIService.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "webhook.selfSignedIssuer" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "webhook.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "webhook.rootCACertificate" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "webhook.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "webhook.rootCACertificate" . }}
+  duration: {{ .Values.pki.caDuration }}
+  issuerRef:
+    name: {{ include "webhook.selfSignedIssuer" . }}
+  commonName: "ca.{{ include "webhook.fullname" . }}.cert-manager"
+  isCA: true
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ include "webhook.rootCAIssuer" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "webhook.labels" . | nindent 4 }}
+spec:
+  ca:
+    secretName: {{ include "webhook.rootCACertificate" . }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "webhook.servingCertificate" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "webhook.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "webhook.servingCertificate" . }}
+  duration: {{ .Values.pki.servingCertificateDuration }}
+  issuerRef:
+    name: {{ include "webhook.rootCAIssuer" . }}
+  dnsNames:
+    - {{ include "webhook.fullname" . }}
+    - {{ include "webhook.fullname" . }}.{{ .Release.Namespace }}
+    - {{ include "webhook.fullname" . }}.{{ .Release.Namespace }}.svc
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always

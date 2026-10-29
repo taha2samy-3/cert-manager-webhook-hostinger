@@ -1,0 +1,86 @@
+# API group the webhook registers with the Kubernetes API. Issuers reference
+# it as `webhook.groupName`. Change it only if you need several independent
+# installations; it must be a DNS subdomain you control.
+groupName: acme.hostinger.taha2samy-3.github.io
+
+certManager:
+  # Namespace and ServiceAccount of the cert-manager controller, which is
+  # granted permission to call this webhook.
+  namespace: cert-manager
+  serviceAccountName: cert-manager
+
+# Namespaces whose Secrets the webhook may read to get the Hostinger API token.
+# The release namespace is always included. A ClusterIssuer reads from
+# cert-manager's cluster resource namespace (by default "cert-manager"); an
+# Issuer reads from its own namespace, so list those namespaces here.
+secretAccess:
+  namespaces: []
+  # Restrict access to these Secret names. Empty allows any Secret in the
+  # namespaces above.
+  resourceNames: []
+
+image:
+  repository: ghcr.io/taha2samy-3/cert-manager-webhook-hostinger
+  # Defaults to the chart appVersion.
+  tag: ""
+  # Optional digest (sha256:...). Takes precedence over the tag.
+  digest: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+replicaCount: 1
+
+# Log verbosity of the webhook (klog -v).
+logLevel: 2
+
+containerPort: 8443
+
+service:
+  type: ClusterIP
+  port: 443
+
+serviceAccount:
+  annotations: {}
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+priorityClassName: ""
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+
+pki:
+  # Validity of the self-signed CA and the serving certificate.
+  caDuration: 43800h
+  servingCertificateDuration: 8760h

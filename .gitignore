@@ -1,0 +1,21 @@
+# Build output and local tool binaries (setup-envtest, kube-apiserver, etcd, ...)
+/bin/
+/_out/
+/webhook
+*.exe
+*.test
+*.out
+coverage.*
+
+# Packaged Helm charts
+*.tgz
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Local secrets
+*.env
+.env*

@@ -1,0 +1,23 @@
+The Hostinger DNS01 webhook is installed in namespace {{ .Release.Namespace }}.
+
+1. Store your Hostinger API token (hPanel -> Profile -> API) in a Secret:
+
+   kubectl -n {{ .Values.certManager.namespace }} create secret generic hostinger-credentials \
+     --from-literal=api-token='<HOSTINGER_API_TOKEN>'
+
+2. Reference the webhook from an Issuer or ClusterIssuer:
+
+   solvers:
+     - dns01:
+         webhook:
+           groupName: {{ .Values.groupName }}
+           solverName: hostinger
+           config:
+             apiTokenSecretRef:
+               name: hostinger-credentials
+               key: api-token
+{{- if not (has .Values.certManager.namespace (append .Values.secretAccess.namespaces .Release.Namespace)) }}
+
+WARNING: the webhook cannot read Secrets in "{{ .Values.certManager.namespace }}",
+which is where ClusterIssuers look for them. Add it to secretAccess.namespaces.
+{{- end }}

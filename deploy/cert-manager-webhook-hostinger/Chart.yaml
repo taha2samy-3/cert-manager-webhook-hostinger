@@ -1,0 +1,18 @@
+apiVersion: v2
+name: cert-manager-webhook-hostinger
+description: cert-manager ACME DNS01 solver webhook for Hostinger DNS
+type: application
+# version and appVersion are set from the git tag by the release workflow.
+version: 0.0.0
+appVersion: "0.0.0"
+kubeVersion: ">=1.27.0-0"
+home: https://github.com/taha2samy-3/cert-manager-webhook-hostinger
+sources:
+  - https://github.com/taha2samy-3/cert-manager-webhook-hostinger
+keywords:
+  - cert-manager
+  - acme
+  - dns01
+  - hostinger
+annotations:
+  artifacthub.io/license: Apache-2.0

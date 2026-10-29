@@ -61,14 +61,14 @@ stringData:
 		acmetest.SetManifestPath(manifests),
 		acmetest.SetDNSServer(dnsServer),
 		acmetest.SetUseAuthoritative(false),
+		acmetest.SetStrict(true),
 		acmetest.SetPropagationLimit(propagation),
 		acmetest.SetConfig(map[string]any{
 			"apiTokenSecretRef": map[string]string{"name": "hostinger-credentials", "key": "api-token"},
 			"serverURL":         serverURL,
 		}),
 	)
-	// RunConformance additionally requires strict mode; Basic + Extended
-	// cover Present/CleanUp and "deleting one record retains others".
-	fixture.RunBasic(t)
-	fixture.RunExtended(t)
+	// Strict mode enables Extended/DeletingOneRecordRetainsOthers, which is
+	// what wildcard + apex certificates rely on.
+	fixture.RunConformance(t)
 }

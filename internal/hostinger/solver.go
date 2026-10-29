@@ -72,9 +72,6 @@ func (s *Solver) Name() string {
 
 // Initialize builds the Kubernetes client used to read API token Secrets.
 func (s *Solver) Initialize(kubeClientConfig *rest.Config, _ <-chan struct{}) error {
-	if s.kube != nil {
-		return nil
-	}
 	cl, err := kubernetes.NewForConfig(kubeClientConfig)
 	if err != nil {
 		return err
