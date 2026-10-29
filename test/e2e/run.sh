@@ -7,6 +7,7 @@
 # Usage: test/e2e/run.sh            (creates kind cluster "hostinger-e2e")
 #   KEEP_CLUSTER=1  keep the cluster afterwards
 #   SKIP_BUILD=1    reuse already-loaded images
+#   KIND_NODE_IMAGE kindest/node image to test another Kubernetes version
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -53,7 +54,7 @@ wait_for() { # wait_for <description> <timeout seconds> <command...>
 }
 
 log "Creating kind cluster $CLUSTER"
-"$KIND" get clusters | grep -qx "$CLUSTER" || "$KIND" create cluster --name "$CLUSTER" --wait 120s
+"$KIND" get clusters | grep -qx "$CLUSTER" || "$KIND" create cluster --name "$CLUSTER" --wait 120s ${KIND_NODE_IMAGE:+--image "$KIND_NODE_IMAGE"}
 kubectl config use-context "kind-$CLUSTER" >/dev/null
 
 if [[ -z "${SKIP_BUILD:-}" ]]; then
