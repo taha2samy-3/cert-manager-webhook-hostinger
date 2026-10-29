@@ -80,6 +80,22 @@ tolerations: []
 affinity: {}
 topologySpreadConstraints: []
 
+networkPolicy:
+  enabled: false
+  # Optional NetworkPolicyPeers allowed to reach the webhook port.
+  ingressFrom: []
+  # TCP ports the webhook may open: Hostinger API (443) and the Kubernetes
+  # API server (443 or 6443 depending on the distribution).
+  egressPorts: [443, 6443]
+  # Optional NetworkPolicyPeers to restrict those egress ports to.
+  egressTo: []
+
+serviceMonitor:
+  enabled: false
+  namespace: ""
+  labels: {}
+  interval: 60s
+
 pki:
   # Validity of the self-signed CA and the serving certificate.
   caDuration: 43800h

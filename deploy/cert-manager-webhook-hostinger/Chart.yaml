@@ -17,3 +17,21 @@ keywords:
   - hostinger
 annotations:
   artifacthub.io/license: Apache-2.0
+  artifacthub.io/category: security
+  artifacthub.io/operator: "false"
+  artifacthub.io/prerelease: "false"
+  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/links: |
+    - name: Source
+      url: https://github.com/taha2samy-3/cert-manager-webhook-hostinger
+    - name: cert-manager DNS01 webhooks
+      url: https://cert-manager.io/docs/configuration/acme/dns01/webhook/
+    - name: Hostinger API
+      url: https://developers.hostinger.com
+  # Set by the release workflow to the exact image (with digest) and changes.
+  artifacthub.io/images: |
+    - name: cert-manager-webhook-hostinger
+      image: ghcr.io/taha2samy-3/cert-manager-webhook-hostinger:0.0.0
+  artifacthub.io/changes: |
+    - kind: added
+      description: Initial release

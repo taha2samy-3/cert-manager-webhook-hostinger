@@ -1,0 +1,407 @@
+{
+  "paths": {
+    "/api/dns/v1/zones/{domain}": {
+      "delete": {
+        "operationId": "DNS_deleteDNSRecordsV1",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/domain"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DNS.V1.Zone.DestroyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Common.SuccessEmptyResource"
+                }
+              }
+            },
+            "description": "Success response"
+          },
+          "401": {
+            "$ref": "#/components/responses/Common.Response.UnauthorizedResponse"
+          },
+          "422": {
+            "$ref": "#/components/responses/Common.Response.UnprocessableContentResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/Common.Response.ErrorResponse"
+          }
+        }
+      },
+      "get": {
+        "operationId": "DNS_getDNSRecordsV1",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/domain"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DNS.V1.Zone.RecordCollection"
+                }
+              }
+            },
+            "description": "Success response"
+          },
+          "401": {
+            "$ref": "#/components/responses/Common.Response.UnauthorizedResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/Common.Response.ErrorResponse"
+          }
+        }
+      },
+      "put": {
+        "operationId": "DNS_updateDNSRecordsV1",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/domain"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DNS.V1.Zone.UpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Common.SuccessEmptyResource"
+                }
+              }
+            },
+            "description": "Success response"
+          },
+          "401": {
+            "$ref": "#/components/responses/Common.Response.UnauthorizedResponse"
+          },
+          "422": {
+            "$ref": "#/components/responses/Common.Response.UnprocessableContentResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/Common.Response.ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/dns/v1/zones/{domain}/reset": {
+      "post": {
+        "operationId": "DNS_resetDNSRecordsV1",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/domain"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DNS.V1.Zone.ResetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Common.SuccessEmptyResource"
+                }
+              }
+            },
+            "description": "Success response"
+          },
+          "401": {
+            "$ref": "#/components/responses/Common.Response.UnauthorizedResponse"
+          },
+          "422": {
+            "$ref": "#/components/responses/Common.Response.UnprocessableContentResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/Common.Response.ErrorResponse"
+          }
+        }
+      }
+    },
+    "/api/dns/v1/zones/{domain}/validate": {
+      "post": {
+        "operationId": "DNS_validateDNSRecordsV1",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/domain"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DNS.V1.Zone.UpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Common.SuccessEmptyResource"
+                }
+              }
+            },
+            "description": "Success response"
+          },
+          "401": {
+            "$ref": "#/components/responses/Common.Response.UnauthorizedResponse"
+          },
+          "422": {
+            "$ref": "#/components/responses/Common.Response.UnprocessableContentResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/Common.Response.ErrorResponse"
+          }
+        }
+      }
+    }
+  },
+  "schemas": {
+    "DNS.V1.Zone.DestroyRequest": {
+      "properties": {
+        "filters": {
+          "description": "Filter records for deletion",
+          "items": {
+            "properties": {
+              "name": {
+                "description": "Name of the record",
+                "example": "@",
+                "type": "string"
+              },
+              "type": {
+                "description": "Type of the record",
+                "enum": [
+                  "A",
+                  "AAAA",
+                  "CNAME",
+                  "ALIAS",
+                  "MX",
+                  "TXT",
+                  "NS",
+                  "SOA",
+                  "SRV",
+                  "CAA"
+                ],
+                "example": "A",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "type"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "filters"
+      ],
+      "type": "object"
+    },
+    "DNS.V1.Zone.NameRecordCollection": {
+      "description": "Array of [`DNS.V1.Zone.NameRecordResource`](#model/dnsv1zonenamerecordresource)",
+      "items": {
+        "$ref": "#/components/schemas/DNS.V1.Zone.NameRecordResource"
+      },
+      "type": "array"
+    },
+    "DNS.V1.Zone.NameRecordResource": {
+      "properties": {
+        "content": {
+          "description": "Content of the name record",
+          "example": "mydomain.tld.",
+          "type": "string"
+        },
+        "is_disabled": {
+          "description": "Flag to mark name record as disabled",
+          "example": false,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "DNS.V1.Zone.RecordCollection": {
+      "description": "Array of [`DNS.V1.Zone.RecordResource`](#model/dnsv1zonerecordresource)",
+      "items": {
+        "$ref": "#/components/schemas/DNS.V1.Zone.RecordResource"
+      },
+      "type": "array"
+    },
+    "DNS.V1.Zone.RecordResource": {
+      "properties": {
+        "name": {
+          "description": "Name of the record (use `@` for wildcard name)",
+          "example": "www",
+          "type": "string"
+        },
+        "records": {
+          "$ref": "#/components/schemas/DNS.V1.Zone.NameRecordCollection"
+        },
+        "ttl": {
+          "description": "TTL (Time-To-Live) of the record",
+          "example": 14400,
+          "type": "integer"
+        },
+        "type": {
+          "description": "Type of the record",
+          "enum": [
+            "A",
+            "AAAA",
+            "CNAME",
+            "ALIAS",
+            "MX",
+            "TXT",
+            "NS",
+            "SOA",
+            "SRV",
+            "CAA"
+          ],
+          "example": "A",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "DNS.V1.Zone.ResetRequest": {
+      "properties": {
+        "reset_email_records": {
+          "default": true,
+          "description": "Determines if email records should be reset",
+          "example": true,
+          "type": "boolean"
+        },
+        "sync": {
+          "default": true,
+          "description": "Determines if operation should be run synchronously",
+          "example": true,
+          "type": "boolean"
+        },
+        "whitelisted_record_types": {
+          "description": "Specifies which record types to not reset",
+          "example": [
+            "MX",
+            "TXT"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "DNS.V1.Zone.UpdateRequest": {
+      "properties": {
+        "overwrite": {
+          "default": true,
+          "description": "If `true`, resource records (RRs) matching name and type will be deleted and new RRs will be created,\notherwise resource records' ttl's are updated and new records are appended.\nIf no matching RRs are found, they are created.",
+          "example": true,
+          "type": "boolean"
+        },
+        "zone": {
+          "items": {
+            "properties": {
+              "name": {
+                "description": "Name of the record (use `@` for wildcard name)",
+                "example": "www",
+                "type": "string"
+              },
+              "records": {
+                "description": "Records assigned to the name",
+                "items": {
+                  "properties": {
+                    "content": {
+                      "description": "Content of the name record",
+                      "example": "mydomain.tld.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "content"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "ttl": {
+                "description": "TTL (Time-To-Live) of the record",
+                "example": 14400,
+                "type": "integer"
+              },
+              "type": {
+                "description": "Type of the record",
+                "enum": [
+                  "A",
+                  "AAAA",
+                  "CNAME",
+                  "ALIAS",
+                  "MX",
+                  "TXT",
+                  "NS",
+                  "SOA",
+                  "SRV",
+                  "CAA"
+                ],
+                "example": "A",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "records",
+              "type"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "zone"
+      ],
+      "type": "object"
+    }
+  },
+  "security": {
+    "apiToken": {
+      "description": "API Token authentication",
+      "scheme": "bearer",
+      "type": "http"
+    }
+  }
+}

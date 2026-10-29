@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["groupName", "certManager", "image"],
+  "properties": {
+    "groupName": {
+      "type": "string",
+      "description": "API group of the webhook; referenced as webhook.groupName in Issuers.",
+      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)+$"
+    },
+    "certManager": {
+      "type": "object",
+      "required": ["namespace", "serviceAccountName"],
+      "properties": {
+        "namespace": {"type": "string", "minLength": 1},
+        "serviceAccountName": {"type": "string", "minLength": 1}
+      }
+    },
+    "secretAccess": {
+      "type": "object",
+      "properties": {
+        "namespaces": {"type": "array", "items": {"type": "string"}},
+        "resourceNames": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "image": {
+      "type": "object",
+      "required": ["repository"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"type": "string"},
+        "digest": {"type": "string", "pattern": "^(sha256:[a-f0-9]{64})?$"},
+        "pullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]}
+      }
+    },
+    "imagePullSecrets": {"type": "array"},
+    "nameOverride": {"type": "string"},
+    "fullnameOverride": {"type": "string"},
+    "replicaCount": {"type": "integer", "minimum": 1},
+    "logLevel": {"type": "integer", "minimum": 0, "maximum": 10},
+    "containerPort": {"type": "integer", "minimum": 1024, "maximum": 65535},
+    "service": {
+      "type": "object",
+      "properties": {
+        "type": {"type": "string", "enum": ["ClusterIP", "NodePort", "LoadBalancer"]},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535}
+      }
+    },
+    "serviceAccount": {"type": "object"},
+    "podAnnotations": {"type": "object"},
+    "podLabels": {"type": "object"},
+    "podSecurityContext": {"type": "object"},
+    "securityContext": {"type": "object"},
+    "resources": {"type": "object"},
+    "podDisruptionBudget": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "minAvailable": {"type": ["integer", "string"]}
+      }
+    },
+    "priorityClassName": {"type": "string"},
+    "nodeSelector": {"type": "object"},
+    "tolerations": {"type": "array"},
+    "affinity": {"type": "object"},
+    "topologySpreadConstraints": {"type": "array"},
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "ingressFrom": {"type": "array"},
+        "egressPorts": {"type": "array", "items": {"type": "integer"}},
+        "egressTo": {"type": "array"}
+      }
+    },
+    "serviceMonitor": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "namespace": {"type": "string"},
+        "labels": {"type": "object"},
+        "interval": {"type": "string"}
+      }
+    },
+    "pki": {
+      "type": "object",
+      "properties": {
+        "caDuration": {"type": "string"},
+        "servingCertificateDuration": {"type": "string"}
+      }
+    }
+  }
+}
