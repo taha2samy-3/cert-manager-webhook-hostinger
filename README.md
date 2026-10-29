@@ -167,7 +167,7 @@ a Gateway certificate.
 | `serviceMonitor.enabled` | `false` | Prometheus Operator ServiceMonitor for `/metrics` |
 | `podSecurityContext`, `securityContext` | non-root, read-only rootfs, no capabilities, `RuntimeDefault` seccomp | |
 
-See [values.yaml](deploy/cert-manager-webhook-hostinger/values.yaml) for everything else.
+See [values.yaml](https://github.com/taha2samy-3/cert-manager-webhook-hostinger/blob/main/deploy/cert-manager-webhook-hostinger/values.yaml) for everything else.
 
 ## Verify what you run
 
