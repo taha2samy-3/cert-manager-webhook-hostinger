@@ -27,10 +27,9 @@ type recordSet struct {
 	Records []record `json:"records"`
 }
 
-// Server is a fake Hostinger API.
-type Server struct {
-	*httptest.Server
-
+// Fake is an in-memory Hostinger DNS API. It implements http.Handler and
+// can additionally serve its zones over DNS.
+type Fake struct {
 	Token string
 
 	mu    sync.Mutex
@@ -38,32 +37,43 @@ type Server struct {
 	calls map[string]int
 }
 
-// NewServer starts a fake API serving the given zones (domain names without
-// trailing dot). Requests must carry "Authorization: Bearer <token>".
-func NewServer(token string, zones ...string) *Server {
-	s := &Server{Token: token, zones: map[string][]recordSet{}, calls: map[string]int{}}
+// New returns a fake API for the given zones (domain names without trailing
+// dot). Requests must carry "Authorization: Bearer <token>".
+func New(token string, zones ...string) *Fake {
+	f := &Fake{Token: token, zones: map[string][]recordSet{}, calls: map[string]int{}}
 	for _, z := range zones {
-		s.zones[strings.ToLower(z)] = nil
+		f.zones[strings.ToLower(z)] = nil
 	}
-	s.Server = httptest.NewServer(http.HandlerFunc(s.handle))
-	return s
+	return f
+}
+
+// Server is a Fake listening on a local httptest server.
+type Server struct {
+	*Fake
+	*httptest.Server
+}
+
+// NewServer starts a Fake on a random local port.
+func NewServer(token string, zones ...string) *Server {
+	f := New(token, zones...)
+	return &Server{Fake: f, Server: httptest.NewServer(f)}
 }
 
 // TXT returns the unquoted values of the TXT set called name in zone.
-func (s *Server) TXT(zone, name string) []string {
+func (s *Fake) TXT(zone, name string) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.txtLocked(zone, name)
 }
 
 // Calls returns how many requests were made with the given HTTP method.
-func (s *Server) Calls(method string) int {
+func (s *Fake) Calls(method string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.calls[method]
 }
 
-func (s *Server) txtLocked(zone, name string) []string {
+func (s *Fake) txtLocked(zone, name string) []string {
 	var out []string
 	for _, rs := range s.zones[zone] {
 		if rs.Type == "TXT" && rs.Name == name {
@@ -75,7 +85,7 @@ func (s *Server) txtLocked(zone, name string) []string {
 	return out
 }
 
-func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
+func (s *Fake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Authorization") != "Bearer "+s.Token {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"message": "Unauthenticated."})
 		return
@@ -176,34 +186,38 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// StartDNS serves TXT queries for the fake zones over UDP on 127.0.0.1 and
-// returns the listen address and a shutdown function.
-func (s *Server) StartDNS() (string, func() error, error) {
+// StartDNS serves the zones over UDP on a random 127.0.0.1 port and returns
+// the listen address and a shutdown function.
+func (s *Fake) StartDNS() (string, func() error, error) {
 	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
 		return "", nil, err
 	}
-	srv := &dns.Server{PacketConn: pc, Handler: dns.HandlerFunc(s.serveDNS)}
+	srv := &dns.Server{PacketConn: pc, Handler: s}
 	go func() { _ = srv.ActivateAndServe() }()
 	return pc.LocalAddr().String(), srv.Shutdown, nil
 }
 
-func (s *Server) serveDNS(w dns.ResponseWriter, req *dns.Msg) {
+// ServeDNS answers SOA queries for zone apexes and TXT queries from the fake
+// zone data. Every name under a fake zone carries the zone SOA in the
+// authority section, which is how cert-manager discovers the zone.
+func (s *Fake) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
 	msg := new(dns.Msg)
 	msg.SetReply(req)
 	msg.Authoritative = true
 
 	s.mu.Lock()
 	for _, q := range req.Question {
-		if q.Qtype != dns.TypeTXT {
+		fqdn := strings.ToLower(strings.TrimSuffix(q.Name, "."))
+		zone, name, ok := s.findZoneLocked(fqdn)
+		if !ok {
+			msg.Rcode = dns.RcodeRefused
 			continue
 		}
-		fqdn := strings.ToLower(strings.TrimSuffix(q.Name, "."))
-		for zone := range s.zones {
-			name, ok := relative(fqdn, zone)
-			if !ok {
-				continue
-			}
+		switch {
+		case q.Qtype == dns.TypeSOA && name == "@":
+			msg.Answer = append(msg.Answer, soa(zone))
+		case q.Qtype == dns.TypeTXT:
 			for _, v := range s.txtLocked(zone, name) {
 				msg.Answer = append(msg.Answer, &dns.TXT{
 					Hdr: dns.RR_Header{Name: q.Name, Rrtype: dns.TypeTXT, Class: dns.ClassINET, Ttl: 60},
@@ -211,16 +225,36 @@ func (s *Server) serveDNS(w dns.ResponseWriter, req *dns.Msg) {
 				})
 			}
 		}
+		if len(msg.Answer) == 0 {
+			msg.Ns = append(msg.Ns, soa(zone))
+		}
 	}
 	s.mu.Unlock()
 
 	_ = w.WriteMsg(msg)
 }
 
-func relative(fqdn, zone string) (string, bool) {
-	if fqdn == zone {
-		return "@", true
+func (s *Fake) findZoneLocked(fqdn string) (zone, name string, ok bool) {
+	for z := range s.zones {
+		if fqdn == z {
+			return z, "@", true
+		}
+		if n, found := strings.CutSuffix(fqdn, "."+z); found {
+			return z, n, true
+		}
 	}
-	name, ok := strings.CutSuffix(fqdn, "."+zone)
-	return name, ok
+	return "", "", false
+}
+
+func soa(zone string) dns.RR {
+	return &dns.SOA{
+		Hdr:     dns.RR_Header{Name: dns.Fqdn(zone), Rrtype: dns.TypeSOA, Class: dns.ClassINET, Ttl: 60},
+		Ns:      "ns1." + dns.Fqdn(zone),
+		Mbox:    "hostmaster." + dns.Fqdn(zone),
+		Serial:  1,
+		Refresh: 3600,
+		Retry:   600,
+		Expire:  86400,
+		Minttl:  60,
+	}
 }
