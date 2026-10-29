@@ -1,0 +1,77 @@
+# Weekly checks on things that change outside this repository:
+#   - Hostinger's DNS zone API (OpenAPI spec) drifting from the snapshot the
+#     client was written against -> opens/updates an issue.
+#   - New vulnerabilities in the latest published image -> results go to the
+#     Security tab; fixes arrive via Dependabot + auto-release.
+name: Upstream watch
+
+on:
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  hostinger-api:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Compare Hostinger DNS API with snapshot
+        id: diff
+        run: |
+          hack/hostinger-api-snapshot.sh > /tmp/current.json
+          if diff -u hack/hostinger-dns-api.json /tmp/current.json > /tmp/api.diff; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Open or update issue
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Hostinger DNS API changed"
+          {
+            echo "The DNS zone part of https://developers.hostinger.com/openapi/openapi.json no longer matches \`hack/hostinger-dns-api.json\`."
+            echo
+            echo "Review the diff against \`internal/hostinger/client.go\`, then refresh the snapshot with \`hack/hostinger-api-snapshot.sh > hack/hostinger-dns-api.json\`."
+            echo
+            echo '```diff'
+            head -c 60000 /tmp/api.diff
+            echo '```'
+          } > body.md
+          gh label create upstream-api --color D93F0B --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          existing="$(gh issue list --repo "$GITHUB_REPOSITORY" --label upstream-api --state open --json number --jq '.[0].number')"
+          if [[ -n "$existing" ]]; then
+            gh issue edit "$existing" --repo "$GITHUB_REPOSITORY" --body-file body.md
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --label upstream-api --body-file body.md
+          fi
+
+  image-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Resolve latest image
+        id: img
+        run: echo "ref=ghcr.io/${GITHUB_REPOSITORY,,}:latest" >> "$GITHUB_OUTPUT"
+      - name: Scan
+        id: scan
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: ${{ steps.img.outputs.ref }}
+          fail-build: false
+          only-fixed: true
+          output-format: sarif
+      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: ${{ steps.scan.outputs.sarif }}
+          category: published-image

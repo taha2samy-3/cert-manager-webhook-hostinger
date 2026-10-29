@@ -1,0 +1,45 @@
+# Update lifecycle:
+#   1. Dependabot opens PRs for Go modules, base image digests and actions.
+#   2. dependabot-auto-merge.yml merges patch/minor/digest updates once CI
+#      (unit, conformance, image scan, e2e) is green.
+#   3. auto-release.yml cuts a patch release weekly when shipped files changed,
+#      so fixes reach users as signed, attested images and charts.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "deps(go)"
+    groups:
+      kubernetes:
+        patterns: ["k8s.io/*", "sigs.k8s.io/*"]
+      cert-manager:
+        patterns: ["github.com/cert-manager/*"]
+      go-deps:
+        patterns: ["*"]
+
+  # Hardened base images (pinned by digest in FROM lines).
+  - package-ecosystem: docker
+    directories: ["/", "/test/e2e"]
+    schedule:
+      interval: daily
+    commit-message:
+      prefix: "deps(image)"
+    groups:
+      base-images:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "deps(actions)"
+    groups:
+      actions:
+        patterns: ["*"]

@@ -1,0 +1,78 @@
+# Cuts a release when shipped files changed since the last tag, so merged
+# dependency and base image updates are published without manual work.
+# Runs weekly; can also be triggered by hand with a chosen bump.
+name: Auto release
+
+on:
+  schedule:
+    - cron: "0 6 * * 2" # Tuesdays, after Monday's Dependabot batch
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version part to bump
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      force:
+        description: Release even if nothing shipped changed
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the tag
+    outputs:
+      tag: ${{ steps.next.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Compute next version
+        id: next
+        env:
+          BUMP: ${{ inputs.bump || 'patch' }}
+          FORCE: ${{ inputs.force || false }}
+        run: |
+          last="$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null || true)"
+          if [[ -z "$last" ]]; then
+            echo "No release yet; push the first tag (e.g. v0.1.0) by hand."
+            exit 0
+          fi
+          if [[ "$FORCE" != "true" ]] && git diff --quiet "$last" HEAD -- go.mod go.sum Dockerfile cmd internal deploy; then
+            echo "Nothing shipped changed since $last."
+            exit 0
+          fi
+          IFS=. read -r major minor patch <<<"${last#v}"
+          patch="${patch%%-*}"
+          case "$BUMP" in
+            major) next="v$((major + 1)).0.0" ;;
+            minor) next="v${major}.$((minor + 1)).0" ;;
+            *)     next="v${major}.${minor}.$((patch + 1))" ;;
+          esac
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$next" -m "Release $next"
+          git push origin "$next"
+          echo "tag=$next" >> "$GITHUB_OUTPUT"
+          echo "Releasing $next (previous $last)" >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    needs: [plan]
+    if: needs.plan.outputs.tag != ''
+    uses: ./.github/workflows/release.yml
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+    with:
+      tag: ${{ needs.plan.outputs.tag }}
