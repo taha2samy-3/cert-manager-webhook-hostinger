@@ -178,8 +178,11 @@ func TestErrors(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "unknown zone",
-			mutate:  func(ch *v1alpha1.ChallengeRequest) { ch.ResolvedZone = "other.org."; ch.ResolvedFQDN = "_acme-challenge.other.org." },
+			name: "unknown zone",
+			mutate: func(ch *v1alpha1.ChallengeRequest) {
+				ch.ResolvedZone = "other.org."
+				ch.ResolvedFQDN = "_acme-challenge.other.org."
+			},
 			wantErr: `zone "other.org" not found`,
 		},
 		{
