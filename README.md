@@ -32,6 +32,11 @@ Let's Encrypt (or any ACME) certificates, including **wildcards**, by creating t
 - Kubernetes 1.27+
 - cert-manager 1.15+ ([install](https://cert-manager.io/docs/installation/helm/))
 - A Hostinger API token: hPanel → Profile → **API**
+- The domain must use Hostinger's name servers, `ns1.dns-parking.com` and
+  `ns2.dns-parking.com`. The API also stores records for a domain whose name
+  servers point elsewhere, but nobody on the internet sees them, so the challenge
+  never passes. Check with `dig NS example.com +short`; change the name servers
+  at your domain registrar if needed.
 
 ## Install
 
@@ -57,6 +62,11 @@ kubectl -n cert-manager create secret generic hostinger-credentials \
 A `ClusterIssuer` reads the Secret from cert-manager's *cluster resource namespace*
 (`cert-manager` by default). An `Issuer` reads it from its own namespace. Add those
 namespaces to `secretAccess.namespaces` so the webhook is allowed to read them.
+
+> **A Hostinger API token has no scopes.** It can do everything your account can
+> do, including servers, billing and other domains. Create a token only for this
+> webhook, give it an expiry date (and renew it before then), and keep it only in
+> this Secret.
 
 ### 2. Create an issuer
 
@@ -150,6 +160,27 @@ when two-thirds of its lifetime has passed (configurable with `renewBefore` or
 webhook. You don't need to do anything. The e2e suite checks this by issuing
 1-hour certificates and waiting for cert-manager to renew both a `Certificate` and
 a Gateway certificate.
+
+## Good to know about the Hostinger API
+
+These were observed on the real API (November 2026):
+
+- **Rate limit.** 90 requests per minute for your whole Hostinger account. Every
+  token and every tool of the account (for example external-dns or scripts) shares
+  that budget. Each answer tells how much is left in a `RateLimit` header. One
+  challenge takes only a few requests, but many certificates at once, or other
+  tools, can use the budget up.
+- **DNS caching.** A new TXT record shows on both Hostinger name servers within a
+  few seconds. But if anything looked the name up *before* the record existed, the
+  "no such record" answer can stay cached for a while (we saw 80 seconds; the SOA
+  allows up to 10 minutes). A changed or deleted record can be served from cache
+  for up to its TTL. cert-manager waits and checks again, so this only makes
+  issuance slower.
+- **Zone snapshots.** Hostinger saves a snapshot of the zone with every change, and
+  hPanel can restore one, which works as an undo button. The webhook
+  never restores snapshots or resets a zone; it only adds and removes its own
+  `_acme-challenge` values. Restoring an old snapshot while a challenge runs removes
+  its value.
 
 ## Chart values
 
