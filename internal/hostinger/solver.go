@@ -22,10 +22,15 @@ import (
 )
 
 const (
-	recordTypeTXT     = "TXT"
-	defaultTTL        = 60
-	defaultSecretKey  = "api-token"
-	operationTimeout  = 2 * time.Minute
+	recordTypeTXT    = "TXT"
+	defaultTTL       = 60
+	defaultSecretKey = "api-token"
+	// operationTimeout is the time budget of one Present or CleanUp call,
+	// retries included. cert-manager reaches the webhook through the
+	// Kubernetes API server, which ends the request after 60 seconds by
+	// default; finishing well before that means cert-manager sees the real
+	// outcome, and no write happens after it has given up.
+	operationTimeout  = 45 * time.Second
 	defaultSolverName = "hostinger"
 )
 

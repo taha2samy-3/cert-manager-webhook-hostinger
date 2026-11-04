@@ -18,12 +18,18 @@ import (
 const DefaultBaseURL = "https://developers.hostinger.com"
 
 const (
-	defaultTimeout = 30 * time.Second
+	// defaultTimeout bounds one HTTP request. It is well below the solver's
+	// time budget, so a hung connection leaves time for a retry.
+	defaultTimeout = 15 * time.Second
 	maxRetries     = 3
 	// maxRetryAfter caps how long we honour a Retry-After header so a single
 	// challenge cannot block a webhook worker indefinitely.
 	maxRetryAfter = 60 * time.Second
 )
+
+// retryBaseDelay is the first pause of the exponential backoff used when the
+// answer has no Retry-After header.
+var retryBaseDelay = time.Second
 
 // RecordSet mirrors DNS.V1.Zone.RecordResource / the items of
 // DNS.V1.Zone.UpdateRequest.zone in the Hostinger OpenAPI spec.
@@ -141,20 +147,32 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 			req.Header.Set("User-Agent", c.userAgent)
 		}
 
+		// A network error, a rate limit (429) or a server error (5xx) is
+		// retried with a pause, as long as the pause fits in the time left
+		// before ctx's deadline. Every request is safe to repeat: a GET or
+		// DELETE trivially, a PUT with overwrite=true replaces the same data
+		// again, and a repeated append (overwrite=false) of a value that was
+		// saved after all is refused with 422 [DNS:4008] without changes.
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
-			return fmt.Errorf("%s %s: %w", method, path, err)
+			err = fmt.Errorf("%s %s: %w", method, path, err)
+			if ctx.Err() == nil && attempt < maxRetries && pause(ctx, retryAfter("", attempt)) {
+				continue
+			}
+			return err
 		}
 		respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		_ = resp.Body.Close()
 		if err != nil {
-			return fmt.Errorf("reading response of %s %s: %w", method, path, err)
+			err = fmt.Errorf("reading response of %s %s: %w", method, path, err)
+			if ctx.Err() == nil && attempt < maxRetries && pause(ctx, retryAfter("", attempt)) {
+				continue
+			}
+			return err
 		}
 
-		if resp.StatusCode == http.StatusTooManyRequests && attempt < maxRetries {
-			if err := sleep(ctx, retryAfter(resp.Header.Get("Retry-After"), attempt)); err != nil {
-				return err
-			}
+		if retryable(resp.StatusCode) && attempt < maxRetries &&
+			pause(ctx, retryAfter(resp.Header.Get("Retry-After"), attempt)) {
 			continue
 		}
 		if resp.StatusCode < 200 || resp.StatusCode > 299 {
@@ -169,14 +187,30 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 	}
 }
 
+// retryable reports whether an answer with this status may succeed when the
+// request is sent again: the rate limit (429) and server errors (5xx).
+func retryable(status int) bool {
+	return status == http.StatusTooManyRequests || status >= 500
+}
+
 // retryAfter parses a Retry-After header (seconds form, as documented by
 // Hostinger) and falls back to exponential backoff when it is absent.
 func retryAfter(header string, attempt int) time.Duration {
-	d := time.Duration(1<<attempt) * time.Second
+	d := time.Duration(1<<attempt) * retryBaseDelay
 	if secs, err := strconv.Atoi(strings.TrimSpace(header)); err == nil && secs >= 0 {
 		d = time.Duration(secs) * time.Second
 	}
 	return min(d, maxRetryAfter)
+}
+
+// pause waits d before a retry. It returns false without waiting when d
+// does not fit in the time left before ctx's deadline, so the caller can
+// return the error it has instead of failing later with a timeout.
+func pause(ctx context.Context, d time.Duration) bool {
+	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) < d {
+		return false
+	}
+	return sleep(ctx, d) == nil
 }
 
 func sleep(ctx context.Context, d time.Duration) error {

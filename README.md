@@ -206,7 +206,7 @@ kubectl -n cert-manager logs deploy/hostinger-webhook-cert-manager-webhook-hosti
 | `secrets "…" is forbidden` | The Secret's namespace is not in `secretAccess.namespaces` |
 | `zone "…" not found in the Hostinger account` | The token's account doesn't manage that domain, or set `zone` |
 | `hostinger API returned 401` | Token is wrong or expired |
-| `429` in logs | Hostinger rate limit (90 req/min). The webhook backs off and retries |
+| `429` or `5xx` in logs | Hostinger rate limit (90 req/min) or a temporary server error. The webhook backs off and retries, up to 3 times within its 45-second budget; after that cert-manager retries the challenge |
 | Challenge stuck "waiting for DNS propagation" | Check `dig TXT _acme-challenge.<domain> @ns1.dns-parking.com` |
 
 ## Migrating from Lokinado/cert-manager-webhook-hostinger
