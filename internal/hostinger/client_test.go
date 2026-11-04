@@ -69,6 +69,22 @@ func TestClientNotFound(t *testing.T) {
 	}
 }
 
+func TestClientNotOwned(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"message":"[DNS:4002] Customer does not own example.com domain","correlation_id":"x"}`))
+	}))
+	defer srv.Close()
+
+	_, err := NewClient(srv.URL, "tok", "").GetRecords(context.Background(), "example.com")
+	if !IsNotOwned(err) {
+		t.Fatalf("IsNotOwned(%v) = false", err)
+	}
+	if IsNotOwned(&APIError{StatusCode: http.StatusForbidden, Body: `{"message":"Forbidden"}`}) {
+		t.Fatal("IsNotOwned must only match [DNS:4002]")
+	}
+}
+
 func TestRetryAfter(t *testing.T) {
 	tests := []struct {
 		header  string

@@ -65,11 +65,19 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("hostinger API returned %d: %s", e.StatusCode, e.Body)
 }
 
-// IsNotFound reports whether err is a 404 from the Hostinger API, which is
-// what the zone endpoints return for a domain the token cannot manage.
+// IsNotFound reports whether err is a 404 from the Hostinger API.
 func IsNotFound(err error) bool {
 	var apiErr *APIError
 	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound
+}
+
+// IsNotOwned reports whether err is the 403 the zone endpoints return for a
+// domain that is not in the account of the API token:
+// {"message":"[DNS:4002] Customer does not own example.com domain", ...}.
+func IsNotOwned(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusForbidden &&
+		strings.Contains(apiErr.Body, "[DNS:4002]")
 }
 
 // Client is a minimal client for the Hostinger DNS zone API.

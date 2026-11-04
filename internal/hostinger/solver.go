@@ -243,7 +243,7 @@ func loadConfig(cfgJSON *extapi.JSON) (Config, error) {
 func findTXT(ctx context.Context, api *Client, zone, name string) (*RecordSet, error) {
 	sets, err := api.GetRecords(ctx, zone)
 	if err != nil {
-		if IsNotFound(err) {
+		if IsNotOwned(err) || IsNotFound(err) {
 			return nil, fmt.Errorf("zone %q not found in the Hostinger account of this API token: %w", zone, err)
 		}
 		return nil, fmt.Errorf("listing records of zone %q: %w", zone, err)
