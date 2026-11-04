@@ -138,7 +138,7 @@ annotations.
 |---|---|---|
 | `apiTokenSecretRef.name` | (required) | Secret holding the Hostinger API token |
 | `apiTokenSecretRef.key` | `api-token` | Key in that Secret |
-| `ttl` | `60` | TTL of the challenge TXT record, in seconds |
+| `ttl` | `60` | TTL of the challenge TXT record, in seconds. Hostinger accepts 60 to 86400 |
 | `zone` | resolved zone | Hostinger domain to edit, when it differs from the zone cert-manager resolves through SOA lookups (e.g. delegated subzones) |
 | `serverURL` | `https://developers.hostinger.com` | Hostinger API endpoint |
 
@@ -208,6 +208,8 @@ kubectl -n cert-manager logs deploy/hostinger-webhook-cert-manager-webhook-hosti
 | `hostinger API returned 401` | Token is wrong or expired |
 | `429` in logs | Hostinger rate limit (90 req/min). The webhook backs off and retries |
 | Challenge stuck "waiting for DNS propagation" | Check `dig TXT _acme-challenge.<domain> @ns1.dns-parking.com` |
+| `... accepted the value 3 times, but did not save it` | The Hostinger API answered 200 but kept no value, three times. Something else may be writing to the same record at the same moment (hPanel, another tool or cluster) |
+| `... turned off in hPanel` | A value on the `_acme-challenge` name is turned off in hPanel. The API cannot keep that flag when the webhook rewrites the record, so the webhook stops instead. Delete those values or turn them on |
 
 ## Migrating from Lokinado/cert-manager-webhook-hostinger
 

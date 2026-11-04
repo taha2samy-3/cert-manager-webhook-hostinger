@@ -85,6 +85,17 @@ func (s *Solver) Initialize(kubeClientConfig *rest.Config, _ <-chan struct{}) er
 	return nil
 }
 
+// A 200 from the Hostinger API does not prove that a change was saved: two
+// appends to one record set at the same moment both answered 200, and one
+// value was missing afterwards. So Present and CleanUp read the record set
+// back after each write, and write again (at most writeAttempts times) when
+// the change is not there.
+const writeAttempts = 3
+
+// writeRetryDelay is the pause before the second write; it grows with each
+// further attempt.
+var writeRetryDelay = time.Second
+
 // Present adds the challenge key to the TXT record set at ResolvedFQDN,
 // keeping any other values already present. It is idempotent.
 func (s *Solver) Present(ch *v1alpha1.ChallengeRequest) error {
@@ -103,30 +114,47 @@ func (s *Solver) Present(ch *v1alpha1.ChallengeRequest) error {
 	unlock := s.lock(zone, name)
 	defer unlock()
 
-	existing, err := findTXT(ctx, api, zone, name)
-	if err != nil {
-		return err
-	}
-	if existing != nil && hasValue(existing, ch.Key) {
-		return nil
-	}
-
 	ttl := defaultTTL
 	if cfg.TTL != nil {
 		ttl = *cfg.TTL
 	}
-	// overwrite=false appends to an existing TXT set instead of replacing it,
-	// which keeps concurrent challenges on the same name intact.
-	err = api.UpdateRecords(ctx, zone, false, []RecordSet{{
-		Name:    name,
-		Type:    recordTypeTXT,
-		TTL:     ttl,
-		Records: []Record{{Content: ch.Key}},
-	}})
-	if err != nil {
-		return fmt.Errorf("adding TXT record %q to zone %q: %w", name, zone, err)
+	var writeErr error
+	for attempt := 0; ; attempt++ {
+		existing, err := findTXT(ctx, api, zone, name)
+		if err != nil {
+			return err
+		}
+		switch value := findValue(existing, ch.Key); {
+		case value != nil && value.IsDisabled:
+			return fmt.Errorf("TXT record %q in zone %q holds the challenge value, but it is turned off in hPanel; turn it on or delete it", name, zone)
+		case value != nil:
+			return nil
+		}
+		if attempt == writeAttempts {
+			if writeErr != nil {
+				return fmt.Errorf("adding TXT record %q to zone %q: %w", name, zone, writeErr)
+			}
+			return fmt.Errorf("adding TXT record %q to zone %q: the Hostinger API accepted the value %d times, but did not save it", name, zone, writeAttempts)
+		}
+		if attempt > 0 {
+			if err := sleep(ctx, time.Duration(attempt)*writeRetryDelay); err != nil {
+				return err
+			}
+		}
+		// overwrite=false appends to an existing TXT set instead of replacing
+		// it, which keeps other challenges on the same name intact.
+		writeErr = api.UpdateRecords(ctx, zone, false, []RecordSet{{
+			Name:    name,
+			Type:    recordTypeTXT,
+			TTL:     ttl,
+			Records: []Record{{Content: ch.Key}},
+		}})
+		// [DNS:4008] means the value may already be there (for example when
+		// a write that seemed lost arrived late); the next read tells.
+		if writeErr != nil && !IsConflict(writeErr) {
+			return fmt.Errorf("adding TXT record %q to zone %q: %w", name, zone, writeErr)
+		}
 	}
-	return nil
 }
 
 // CleanUp removes only the value matching the challenge key from the TXT
@@ -147,37 +175,54 @@ func (s *Solver) CleanUp(ch *v1alpha1.ChallengeRequest) error {
 	unlock := s.lock(zone, name)
 	defer unlock()
 
-	existing, err := findTXT(ctx, api, zone, name)
-	if err != nil {
-		return err
-	}
-	if existing == nil || !hasValue(existing, ch.Key) {
-		return nil
-	}
+	for attempt := 0; ; attempt++ {
+		existing, err := findTXT(ctx, api, zone, name)
+		if err != nil {
+			return err
+		}
+		if findValue(existing, ch.Key) == nil {
+			return nil
+		}
+		if attempt == writeAttempts {
+			return fmt.Errorf("removing TXT record %q from zone %q: the Hostinger API accepted the change %d times, but did not save it", name, zone, writeAttempts)
+		}
+		if attempt > 0 {
+			if err := sleep(ctx, time.Duration(attempt)*writeRetryDelay); err != nil {
+				return err
+			}
+		}
 
-	var remaining []Record
-	for _, r := range existing.Records {
-		if unquote(r.Content) != ch.Key {
+		var remaining []Record
+		for _, r := range existing.Records {
+			if unquote(r.Content) == ch.Key {
+				continue
+			}
+			// The API cannot write the is_disabled flag, so rewriting the set
+			// would turn this value back on.
+			if r.IsDisabled {
+				return fmt.Errorf("cannot remove the challenge value from TXT record %q in zone %q: the record also has values that are turned off in hPanel, "+
+					"and rewriting it would turn them on; delete them or turn them on", name, zone)
+			}
 			remaining = append(remaining, Record{Content: unquote(r.Content)})
 		}
-	}
 
-	if len(remaining) == 0 {
-		err = api.DeleteRecords(ctx, zone, []DeleteFilter{{Name: name, Type: recordTypeTXT}})
-	} else {
-		// The delete endpoint only filters by name and type, so to drop a
-		// single value we replace the set with the values that must stay.
-		err = api.UpdateRecords(ctx, zone, true, []RecordSet{{
-			Name:    name,
-			Type:    recordTypeTXT,
-			TTL:     existing.TTL,
-			Records: remaining,
-		}})
+		if len(remaining) == 0 {
+			err = api.DeleteRecords(ctx, zone, []DeleteFilter{{Name: name, Type: recordTypeTXT}})
+		} else {
+			// The delete endpoint only filters by name and type, so to drop a
+			// single value we replace the set with the values that must stay.
+			// Sets made in hPanel can have a TTL below what the API accepts.
+			err = api.UpdateRecords(ctx, zone, true, []RecordSet{{
+				Name:    name,
+				Type:    recordTypeTXT,
+				TTL:     min(max(existing.TTL, minTTL), maxTTL),
+				Records: remaining,
+			}})
+		}
+		if err != nil {
+			return fmt.Errorf("removing TXT record %q from zone %q: %w", name, zone, err)
+		}
 	}
-	if err != nil {
-		return fmt.Errorf("removing TXT record %q from zone %q: %w", name, zone, err)
-	}
-	return nil
 }
 
 func (s *Solver) lock(zone, name string) func() {
@@ -233,17 +278,23 @@ func loadConfig(cfgJSON *extapi.JSON) (Config, error) {
 	if err := json.Unmarshal(cfgJSON.Raw, &cfg); err != nil {
 		return cfg, fmt.Errorf("decoding solver config: %w", err)
 	}
-	if cfg.TTL != nil && *cfg.TTL <= 0 {
-		return cfg, fmt.Errorf("ttl must be positive, got %d", *cfg.TTL)
+	if cfg.TTL != nil && (*cfg.TTL < minTTL || *cfg.TTL > maxTTL) {
+		return cfg, fmt.Errorf("ttl must be between %d and %d seconds (the limits of the Hostinger API), got %d", minTTL, maxTTL, *cfg.TTL)
 	}
 	return cfg, nil
 }
+
+// The TTL limits of the Hostinger API, in seconds.
+const (
+	minTTL = 60
+	maxTTL = 86400
+)
 
 // findTXT returns the TXT record set called name in zone, or nil.
 func findTXT(ctx context.Context, api *Client, zone, name string) (*RecordSet, error) {
 	sets, err := api.GetRecords(ctx, zone)
 	if err != nil {
-		if IsNotFound(err) {
+		if IsNotOwned(err) || IsNotFound(err) {
 			return nil, fmt.Errorf("zone %q not found in the Hostinger account of this API token: %w", zone, err)
 		}
 		return nil, fmt.Errorf("listing records of zone %q: %w", zone, err)
@@ -275,13 +326,17 @@ func zoneAndName(ch *v1alpha1.ChallengeRequest, cfg Config) (zone, name string, 
 	return zone, name, nil
 }
 
-func hasValue(set *RecordSet, value string) bool {
-	for _, r := range set.Records {
-		if unquote(r.Content) == value {
-			return true
+// findValue returns the record of set whose content is value, or nil.
+func findValue(set *RecordSet, value string) *Record {
+	if set == nil {
+		return nil
+	}
+	for i := range set.Records {
+		if unquote(set.Records[i].Content) == value {
+			return &set.Records[i]
 		}
 	}
-	return false
+	return nil
 }
 
 // unquote strips the surrounding quotes Hostinger may add to TXT contents.

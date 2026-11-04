@@ -3,10 +3,12 @@ package hostinger_test
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/cert-manager/cert-manager/pkg/acme/webhook/apis/acme/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -150,6 +152,116 @@ func TestCleanUpMissingRecordIsNoop(t *testing.T) {
 	}
 }
 
+// The real API once answered 200 to an append that it did not save.
+func TestPresentWritesAgainWhenTheValueWasNotSaved(t *testing.T) {
+	t.Cleanup(hostinger.SetWriteRetryDelay(time.Millisecond))
+	s, api := newSolver(t)
+	api.LoseWrites(1)
+	if err := s.Present(challenge(t, api, "_acme-challenge.example.com.", "k1", nil)); err != nil {
+		t.Fatalf("Present: %v", err)
+	}
+	if got := api.TXT("example.com", "_acme-challenge"); !slices.Equal(got, []string{"k1"}) {
+		t.Fatalf("TXT = %v, want [k1]", got)
+	}
+	if n := api.Calls("PUT"); n != 2 {
+		t.Fatalf("PUT calls = %d, want 2", n)
+	}
+}
+
+func TestPresentGivesUpWhenWritesKeepGettingLost(t *testing.T) {
+	t.Cleanup(hostinger.SetWriteRetryDelay(time.Millisecond))
+	s, api := newSolver(t)
+	api.LoseWrites(10)
+	err := s.Present(challenge(t, api, "_acme-challenge.example.com.", "k1", nil))
+	if err == nil || !strings.Contains(err.Error(), "accepted the value 3 times, but did not save it") {
+		t.Fatalf("Present error = %v", err)
+	}
+	if n := api.Calls("PUT"); n != 3 {
+		t.Fatalf("PUT calls = %d, want 3", n)
+	}
+}
+
+func TestCleanUpWritesAgainWhenTheChangeWasNotSaved(t *testing.T) {
+	t.Cleanup(hostinger.SetWriteRetryDelay(time.Millisecond))
+	s, api := newSolver(t)
+	ch1 := challenge(t, api, "_acme-challenge.example.com.", "k1", nil)
+	ch2 := challenge(t, api, "_acme-challenge.example.com.", "k2", nil)
+	for _, ch := range []*v1alpha1.ChallengeRequest{ch1, ch2} {
+		if err := s.Present(ch); err != nil {
+			t.Fatalf("Present: %v", err)
+		}
+	}
+
+	api.LoseWrites(1)
+	if err := s.CleanUp(ch1); err != nil {
+		t.Fatalf("CleanUp: %v", err)
+	}
+	if got := api.TXT("example.com", "_acme-challenge"); !slices.Equal(got, []string{"k2"}) {
+		t.Fatalf("TXT = %v, want [k2]", got)
+	}
+
+	api.LoseWrites(1)
+	if err := s.CleanUp(ch2); err != nil {
+		t.Fatalf("CleanUp: %v", err)
+	}
+	if got := api.TXT("example.com", "_acme-challenge"); len(got) != 0 {
+		t.Fatalf("TXT = %v, want none", got)
+	}
+	if n := api.Calls("DELETE"); n != 2 {
+		t.Fatalf("DELETE calls = %d, want 2", n)
+	}
+}
+
+// Record sets made in hPanel can have a TTL the API refuses on writes.
+func TestCleanUpRaisesATTLBelowTheAPIMinimum(t *testing.T) {
+	s, api := newSolver(t)
+	api.Seed("example.com", hostingertest.RecordSet{Name: "_acme-challenge", Type: "TXT", TTL: 50, Records: []hostingertest.Record{
+		{Content: `"other"`}, {Content: `"k1"`},
+	}})
+	if err := s.CleanUp(challenge(t, api, "_acme-challenge.example.com.", "k1", nil)); err != nil {
+		t.Fatalf("CleanUp: %v", err)
+	}
+	sets := api.RecordSets("example.com")
+	if len(sets) != 1 || sets[0].TTL != 60 || len(sets[0].Records) != 1 || sets[0].Records[0].Content != `"other"` {
+		t.Fatalf("record sets = %+v", sets)
+	}
+}
+
+// The API cannot write is_disabled, so rewriting a set would turn values
+// that were turned off in hPanel back on.
+func TestCleanUpDoesNotTurnOnDisabledValues(t *testing.T) {
+	s, api := newSolver(t)
+	seeded := hostingertest.RecordSet{Name: "_acme-challenge", Type: "TXT", TTL: 60, Records: []hostingertest.Record{
+		{Content: `"off"`, IsDisabled: true}, {Content: `"k1"`},
+	}}
+	api.Seed("example.com", seeded)
+	err := s.CleanUp(challenge(t, api, "_acme-challenge.example.com.", "k1", nil))
+	if err == nil || !strings.Contains(err.Error(), "turned off in hPanel") {
+		t.Fatalf("CleanUp error = %v", err)
+	}
+	if sets := api.RecordSets("example.com"); len(sets) != 1 || !reflect.DeepEqual(sets[0], seeded) {
+		t.Fatalf("record sets = %+v, want them unchanged", sets)
+	}
+}
+
+func TestDisabledChallengeValue(t *testing.T) {
+	s, api := newSolver(t)
+	api.Seed("example.com", hostingertest.RecordSet{Name: "_acme-challenge", Type: "TXT", TTL: 60, Records: []hostingertest.Record{
+		{Content: `"k1"`, IsDisabled: true},
+	}})
+	ch := challenge(t, api, "_acme-challenge.example.com.", "k1", nil)
+	if err := s.Present(ch); err == nil || !strings.Contains(err.Error(), "turned off in hPanel") {
+		t.Fatalf("Present error = %v", err)
+	}
+	// Our own value may go, even when it is turned off.
+	if err := s.CleanUp(ch); err != nil {
+		t.Fatalf("CleanUp: %v", err)
+	}
+	if sets := api.RecordSets("example.com"); len(sets) != 0 {
+		t.Fatalf("record sets = %+v, want none", sets)
+	}
+}
+
 func TestRecordNames(t *testing.T) {
 	tests := []struct{ fqdn, want string }{
 		{"_acme-challenge.example.com.", "_acme-challenge"},
@@ -221,9 +333,14 @@ func TestErrors(t *testing.T) {
 			wantErr: "getting secret default/hostinger",
 		},
 		{
-			name:    "invalid ttl",
-			extra:   map[string]any{"ttl": 0},
-			wantErr: "ttl must be positive",
+			name:    "ttl below the API minimum",
+			extra:   map[string]any{"ttl": 59},
+			wantErr: "ttl must be between 60 and 86400 seconds",
+		},
+		{
+			name:    "ttl above the API maximum",
+			extra:   map[string]any{"ttl": 86401},
+			wantErr: "ttl must be between 60 and 86400 seconds",
 		},
 		{
 			name:    "zone override outside fqdn",
