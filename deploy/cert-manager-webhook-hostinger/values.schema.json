@@ -23,6 +23,10 @@
         "resourceNames": {"type": "array", "items": {"type": "string"}}
       }
     },
+    "allowedServerURLs": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^https?://[^,]+$"}
+    },
     "image": {
       "type": "object",
       "required": ["repository"],

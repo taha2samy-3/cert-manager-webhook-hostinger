@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -37,6 +38,8 @@ type Config struct {
 	// cluster resource namespace for a ClusterIssuer.
 	APITokenSecretRef cmmeta.SecretKeySelector `json:"apiTokenSecretRef"`
 	// ServerURL overrides the Hostinger API endpoint. Defaults to DefaultBaseURL.
+	// Any other endpoint must be allowed with Solver.AllowServerURLs, because
+	// the API token is sent to it.
 	ServerURL string `json:"serverURL,omitempty"`
 	// TTL of the challenge TXT record in seconds. Defaults to 60.
 	TTL *int `json:"ttl,omitempty"`
@@ -56,6 +59,10 @@ type Solver struct {
 	// concurrent challenges for one name (e.g. example.com and *.example.com)
 	// don't clobber each other.
 	locks sync.Map
+
+	// allowedServerURLs are the endpoints besides DefaultBaseURL that an
+	// issuer may name in serverURL.
+	allowedServerURLs []string
 }
 
 var _ webhook.Solver = (*Solver)(nil)
@@ -68,6 +75,22 @@ func New(userAgent string) *Solver {
 // NewWithClient returns a Solver using the given Kubernetes client; used by tests.
 func NewWithClient(kube kubernetes.Interface, userAgent string) *Solver {
 	return &Solver{kube: kube, userAgent: userAgent}
+}
+
+// AllowServerURLs lets issuers set serverURL to one of these endpoints, in
+// addition to DefaultBaseURL. The webhook sends the API token to that
+// endpoint, and anyone who may edit an Issuer can set serverURL, so only
+// whoever installs the webhook should allow endpoints.
+func (s *Solver) AllowServerURLs(urls ...string) {
+	for _, u := range urls {
+		if u = normalizeServerURL(u); u != "" {
+			s.allowedServerURLs = append(s.allowedServerURLs, u)
+		}
+	}
+}
+
+func normalizeServerURL(u string) string {
+	return strings.TrimRight(strings.TrimSpace(u), "/")
 }
 
 // Name is the solverName referenced from the Issuer.
@@ -191,6 +214,10 @@ func (s *Solver) clientFor(ctx context.Context, ch *v1alpha1.ChallengeRequest) (
 	cfg, err := loadConfig(ch.Config)
 	if err != nil {
 		return nil, cfg, err
+	}
+	if u := normalizeServerURL(cfg.ServerURL); u != "" && u != DefaultBaseURL && !slices.Contains(s.allowedServerURLs, u) {
+		return nil, cfg, fmt.Errorf("serverURL %q is not allowed: the webhook would send the Hostinger API token there; "+
+			"whoever installs the webhook can allow it with the chart value allowedServerURLs", cfg.ServerURL)
 	}
 	token, err := s.secretValue(ctx, cfg.APITokenSecretRef, ch.ResourceNamespace)
 	if err != nil {

@@ -140,7 +140,7 @@ annotations.
 | `apiTokenSecretRef.key` | `api-token` | Key in that Secret |
 | `ttl` | `60` | TTL of the challenge TXT record, in seconds |
 | `zone` | resolved zone | Hostinger domain to edit, when it differs from the zone cert-manager resolves through SOA lookups (e.g. delegated subzones) |
-| `serverURL` | `https://developers.hostinger.com` | Hostinger API endpoint |
+| `serverURL` | `https://developers.hostinger.com` | Hostinger API endpoint. Any other address must be listed in the chart value `allowedServerURLs`, because the webhook sends the API token there |
 
 ## Renewal
 
@@ -159,6 +159,7 @@ a Gateway certificate.
 | `certManager.namespace` / `.serviceAccountName` | `cert-manager` | cert-manager controller identity allowed to call the webhook |
 | `secretAccess.namespaces` | `[]` | Extra namespaces whose Secrets the webhook may `get` (the release namespace is always included) |
 | `secretAccess.resourceNames` | `[]` | Restrict Secret access to these names |
+| `allowedServerURLs` | `[]` | Hostinger API endpoints, besides the default one, that issuers may set as `serverURL` |
 | `image.repository` / `.tag` / `.digest` | release image, pinned by digest | Image to run |
 | `replicaCount` | `1` | Use `2` with `podDisruptionBudget.enabled=true` for HA |
 | `logLevel` | `2` | klog verbosity |
@@ -211,7 +212,9 @@ kubectl -n cert-manager logs deploy/hostinger-webhook-cert-manager-webhook-hosti
 
 ## Migrating from Lokinado/cert-manager-webhook-hostinger
 
-The solver config keys (`apiTokenSecretRef`, `serverURL`) are compatible. Install
+The solver config keys (`apiTokenSecretRef`, `serverURL`) are compatible. A
+`serverURL` other than `https://developers.hostinger.com` must be added to the
+chart value `allowedServerURLs`. Install
 this chart, then update `groupName` in your issuers to the new value (or set the
 chart's `groupName` to your old one after uninstalling the old chart).
 

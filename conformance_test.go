@@ -55,7 +55,9 @@ stringData:
 		t.Fatal(err)
 	}
 
-	fixture := acmetest.NewFixture(hostinger.New("conformance-test"),
+	solver := hostinger.New("conformance-test")
+	solver.AllowServerURLs(serverURL)
+	fixture := acmetest.NewFixture(solver,
 		acmetest.SetResolvedZone(zone),
 		acmetest.SetAllowAmbientCredentials(false),
 		acmetest.SetManifestPath(manifests),

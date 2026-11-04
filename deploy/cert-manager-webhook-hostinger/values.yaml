@@ -19,6 +19,12 @@ secretAccess:
   # namespaces above.
   resourceNames: []
 
+# Hostinger API endpoints, besides https://developers.hostinger.com, that
+# issuers may set as `serverURL`. The webhook sends the API token to that
+# address, and anyone who may edit an Issuer can set it, so leave this empty
+# unless you run your own proxy or a fake of the Hostinger API.
+allowedServerURLs: []
+
 image:
   repository: ghcr.io/taha2samy-3/cert-manager-webhook-hostinger
   # Defaults to the chart appVersion.

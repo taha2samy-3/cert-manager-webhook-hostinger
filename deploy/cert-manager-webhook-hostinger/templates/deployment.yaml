@@ -45,6 +45,10 @@ spec:
           env:
             - name: GROUP_NAME
               value: {{ .Values.groupName | quote }}
+            {{- with .Values.allowedServerURLs }}
+            - name: HOSTINGER_ALLOWED_SERVER_URLS
+              value: {{ join "," . | quote }}
+            {{- end }}
           ports:
             - name: https
               containerPort: {{ .Values.containerPort }}

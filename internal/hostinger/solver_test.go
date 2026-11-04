@@ -31,7 +31,9 @@ func newSolver(t *testing.T) (*hostinger.Solver, *hostingertest.Server) {
 		ObjectMeta: metav1.ObjectMeta{Name: "hostinger", Namespace: testNS},
 		Data:       map[string][]byte{"api-token": []byte(testToken + "\n")},
 	})
-	return hostinger.NewWithClient(kube, "test"), api
+	s := hostinger.NewWithClient(kube, "test")
+	s.AllowServerURLs(api.URL)
+	return s, api
 }
 
 func challenge(t *testing.T, api *hostingertest.Server, fqdn, key string, extra map[string]any) *v1alpha1.ChallengeRequest {
@@ -187,6 +189,36 @@ func TestZoneOverride(t *testing.T) {
 	}
 	if got := api.TXT("example.com", "_acme-challenge.app"); len(got) != 0 {
 		t.Fatalf("TXT after CleanUp = %v", got)
+	}
+}
+
+// The API token is sent to serverURL, so an issuer may only name the
+// default endpoint or one that whoever installed the webhook allowed.
+func TestServerURLMustBeAllowed(t *testing.T) {
+	api := hostingertest.NewServer(testToken, "example.com")
+	t.Cleanup(api.Close)
+	kube := fake.NewClientset(&corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "hostinger", Namespace: testNS},
+		Data:       map[string][]byte{"api-token": []byte(testToken)},
+	})
+	ch := challenge(t, api, "_acme-challenge.example.com.", "k1", nil)
+
+	s := hostinger.NewWithClient(kube, "test")
+	err := s.Present(ch)
+	if err == nil || !strings.Contains(err.Error(), "is not allowed") {
+		t.Fatalf("Present error = %v", err)
+	}
+	if n := api.Calls("GET") + api.Calls("PUT"); n != 0 {
+		t.Fatalf("the token reached a server that is not allowed: %d calls", n)
+	}
+
+	// A trailing slash on either side does not matter.
+	s.AllowServerURLs(api.URL + "/")
+	if err := s.Present(ch); err != nil {
+		t.Fatalf("Present: %v", err)
+	}
+	if got := api.TXT("example.com", "_acme-challenge"); !slices.Equal(got, []string{"k1"}) {
+		t.Fatalf("TXT = %v, want [k1]", got)
 	}
 }
 

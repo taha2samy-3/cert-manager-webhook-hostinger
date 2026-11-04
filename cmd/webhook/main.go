@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/cert-manager/cert-manager/pkg/acme/webhook/cmd"
 
@@ -19,7 +20,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	cmd.RunWebhookServer(groupName,
-		hostinger.New("cert-manager-webhook-hostinger/"+version),
-	)
+	solver := hostinger.New("cert-manager-webhook-hostinger/" + version)
+	// Comma-separated API endpoints that issuers may set as serverURL,
+	// besides the default one. Set by the chart value allowedServerURLs.
+	if urls := os.Getenv("HOSTINGER_ALLOWED_SERVER_URLS"); urls != "" {
+		solver.AllowServerURLs(strings.Split(urls, ",")...)
+	}
+
+	cmd.RunWebhookServer(groupName, solver)
 }

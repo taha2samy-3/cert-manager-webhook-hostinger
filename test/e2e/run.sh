@@ -92,6 +92,7 @@ helm upgrade --install hostinger-webhook "$ROOT/deploy/cert-manager-webhook-host
   --namespace cert-manager --wait --timeout "$TIMEOUT" \
   --set groupName="$GROUP_NAME" \
   --set image.repository="$IMAGE_REPO" --set image.tag="$IMAGE_TAG" --set image.pullPolicy=Never \
+  --set 'allowedServerURLs={http://fake-hostinger.e2e.svc}' \
   --set replicaCount=2 --set podDisruptionBudget.enabled=true
 kubectl wait --for=condition=Available "apiservice/v1alpha1.$GROUP_NAME" --timeout="$TIMEOUT"
 kubectl get --raw "/apis/$GROUP_NAME/v1alpha1" | grep -q '"name":"hostinger"'
