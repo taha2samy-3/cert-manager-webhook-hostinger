@@ -3,7 +3,7 @@
 # Hardened Wolfi-based Go images (https://taha2samy-3.github.io/node/), pinned
 # by digest and bumped by Dependabot. CI verifies their SLSA provenance before
 # building (hack/verify-base-images.sh).
-FROM --platform=$BUILDPLATFORM ghcr.io/taha2samy-3/go:v1.27-dev@sha256:e8c472c4e7f4e62a83d10810a5e96b15062f9e7a86c7126a0d5dc83c67dc1ff6 AS build
+FROM --platform=$BUILDPLATFORM ghcr.io/taha2samy-3/go:v1.27-dev@sha256:10638664bf2618cb9856f8ca7bcbb8358cd61f2be393b53635e18b65eec38442 AS build
 
 WORKDIR /app/src
 
@@ -24,7 +24,7 @@ RUN --mount=type=cache,target=/app/go/pkg/mod,uid=1000,gid=1000 \
       -ldflags "-s -w -X main.version=${VERSION}" \
       -o /app/webhook ./cmd/webhook
 
-FROM ghcr.io/taha2samy-3/go:v1.27@sha256:269655dc3ce4666d69c63b84c91653dc718c222be57b28221300eea51a9344a6
+FROM ghcr.io/taha2samy-3/go:v1.27@sha256:a7967363a353b5aa1e9c248ca76f0b88abd29cff074ab853ac042bc28272f0d4
 
 COPY --from=build --chown=0:0 --chmod=0555 /app/webhook /usr/local/bin/webhook
 
