@@ -36,7 +36,7 @@ jobs:
           version: v2.15.0
       - name: go vet (conformance build tag)
         run: go vet -tags conformance .
-      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - uses: azure/setup-helm@206711cfec8e22b0f49ff1bf0700d8cb26760df2 # v5.1.0
       - name: helm lint
         run: |
           helm lint --strict deploy/cert-manager-webhook-hostinger
@@ -139,7 +139,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - uses: azure/setup-helm@206711cfec8e22b0f49ff1bf0700d8cb26760df2 # v5.1.0
       - uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
         with:
           install_only: true

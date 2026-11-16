@@ -55,7 +55,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - uses: azure/setup-helm@206711cfec8e22b0f49ff1bf0700d8cb26760df2 # v5.1.0
 
       # Docker credentials are what attest-build-provenance (push-to-registry),
       # cosign and oras read; helm keeps its own login below.
